@@ -12,8 +12,19 @@ import (
 )
 
 var usage = `
-dh-alice1 <filename for message to Bob> <filename to store secret key>
+elg-keygen elg-keygen <filename to store public key> <filename to store secret key>.
+
+Writes decimal-formatted public key ( p, g, ga ) to the first file and writes (p, g, a) to a second file.
+
+Note:
+p = 1024 bits and q = 160 bits by default. To change this, edit the const's L and m
 `
+
+// L is the bit size for p
+const L = 20
+
+// Bit size for q
+const m = 10
 
 func toHexInt(n *big.Int) string {
 	return fmt.Sprintf("%x", n)
@@ -40,18 +51,17 @@ func XORBytes(b1 []byte, b2 []byte) []byte {
 	return b3
 }
 
-// PrivateKeySize is the bit size for a, b
-const PrivateKeySize = 256
-
-// Assuming m=160 for now, should probably be fixed later.
-func generateQ(L int, m int) (*big.Int, *big.Int) {
+// Does not work for m >= 160 yet
+func generateQ(m int64) (*big.Int, *big.Int) {
 
 	// Select an arbitrary bit string SEED such that the length of SEED >= m
 	seed := new(big.Int)
 
 	// z1 is 2^m
-	z1 := new(big.Int)
-	z1.Exp(big.NewInt(2), big.NewInt(int64(m)), nil)
+	z1 := new(big.Int).Exp(big.NewInt(2), big.NewInt(m), nil)
+
+	// z2 is 2^(m-1)
+	z2 := new(big.Int).Exp(big.NewInt(2), big.NewInt(m-1), nil)
 
 	seed, err := rand.Int(rand.Reader, z1)
 	if err != nil {
@@ -84,10 +94,6 @@ func generateQ(L int, m int) (*big.Int, *big.Int) {
 	q := new(big.Int)
 	U.Mod(U, z1)
 
-	// z2 is 2^(m-1)
-	z2 := new(big.Int)
-	z2.Exp(big.NewInt(2), big.NewInt(int64(m-1)), nil)
-
 	q.Or(U, big.NewInt(1))
 	q.Or(q, z2)
 
@@ -100,26 +106,26 @@ func generateQ(L int, m int) (*big.Int, *big.Int) {
 	return q, seed
 }
 
-// Based on https://tools.ietf.org/html/rfc2631#ref-FIPS-186 - Generation of p, q, and g
-func generateDHParams(L int, m int) (*big.Int, *big.Int) {
+// Based on https://tools.ietf.org/html/rfc2631#ref-FIPS-186 - Generation of p and q
+func generatePQ(L int64, m int64) (*big.Int, *big.Int) {
 
 	// Set m' = m/160
 	m1 := int64(math.Ceil(float64(m) / 160))
 
-	// // Set L'=  L/160
+	// Set L'=  L/160
 	L1 := int64(math.Ceil(float64(L) / 160))
 
-	// // Set N'= L/1024
+	// Set N'= L/1024
 	N1 := int64(math.Ceil(float64(L) / 1024))
 
-	// Define p, q, ssed
+	// Define p, q, seed
 	var p *big.Int
 	var q *big.Int
 	var seed *big.Int
 
 	// https://crypto.stackexchange.com/questions/1970/how-are-primes-generated-for-rsa
 	for {
-		q, seed = generateQ(L, m)
+		q, seed = generateQ(m)
 		if q.ProbablyPrime(100) == true {
 			break
 		}
@@ -131,7 +137,7 @@ func generateDHParams(L int, m int) (*big.Int, *big.Int) {
 		// Set R = seed + 2*m' + (L' * counter)
 		R := new(big.Int)
 		R.Add(R, seed)
-		R.Add(R, big.NewInt(2*int64(m1)))
+		R.Add(R, big.NewInt(2*m1))
 		R.Add(R, new(big.Int).Mul(big.NewInt(L1), big.NewInt(counter)))
 
 		// Set V = 0
@@ -149,6 +155,7 @@ func generateDHParams(L int, m int) (*big.Int, *big.Int) {
 
 			if bool != true {
 				fmt.Printf("Error setting String \n")
+				os.Exit(1)
 			}
 
 			temp2 := new(big.Int).Exp(big.NewInt(2), new(big.Int).Mul(big.NewInt(160), big.NewInt(i)), nil)
@@ -157,7 +164,7 @@ func generateDHParams(L int, m int) (*big.Int, *big.Int) {
 		}
 
 		// Set W = V mod 2^L
-		W := new(big.Int).Mod(V, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(L)), nil))
+		W := new(big.Int).Mod(V, new(big.Int).Exp(big.NewInt(2), big.NewInt(L), nil))
 
 		// Set X = W OR 2^(L-1)
 		X := new(big.Int).Or(W, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(L-1)), nil))
@@ -170,7 +177,7 @@ func generateDHParams(L int, m int) (*big.Int, *big.Int) {
 
 		// If p > 2^(L-1) use a robust primality test to test whether p is prime
 
-		if p.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(L)-1), nil)) == 1 {
+		if p.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(L-1), nil)) == 1 {
 			if p.ProbablyPrime(5000) == true {
 				return p, q
 			}
@@ -179,18 +186,79 @@ func generateDHParams(L int, m int) (*big.Int, *big.Int) {
 	return nil, nil
 }
 
+// Returns p, g, ga, a
+func generateDHParams(L int64, m int64) (*big.Int, *big.Int, *big.Int, *big.Int) {
+
+	p, q := generatePQ(L, m)
+
+	// Let j = (p - 1)/q.
+	j := new(big.Int).Div(new(big.Int).Sub(p, big.NewInt(1)), q)
+
+	// Declare g
+	var g *big.Int
+
+	for {
+
+		// Set h = any integer, where 1 < h < p - 1 and h differs from any value previously tried.
+		h, err := rand.Int(rand.Reader, new(big.Int).Sub(p, big.NewInt(2)))
+
+		if err != nil {
+			fmt.Printf("Error creating random Big Int %x\n", err)
+			os.Exit(1)
+		}
+		h.Add(h, big.NewInt(2))
+
+		g = new(big.Int).Exp(h, j, p)
+
+		if g.Cmp(big.NewInt(1)) != 0 {
+			break
+		}
+	}
+
+	// TODO: Verify that p=qj + 1. This demonstrates that the parameters meet the X9.42 parameter criteria.
+
+	// Generate random number a in the range [0, p)
+	a, err := rand.Int(rand.Reader, new(big.Int).Exp(big.NewInt(2), big.NewInt(L), nil))
+
+	if err != nil {
+		fmt.Printf("Error creating random Big Int %x\n", err)
+		os.Exit(1)
+	}
+
+	// Compute g^a mod p
+	ga := new(big.Int).Exp(g, a, p)
+
+	return p, g, ga, a
+}
+
+func checkError(err error) {
+	if err != nil {
+		fmt.Printf("%x", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 
-	args := os.Args[1:]
-
-	if len(args) != 2 {
+	if len(os.Args) != 3 {
 		fmt.Printf("%s", usage)
 		return
 	}
-	p, q := generateDHParams(20, 8)
-	fmt.Printf("p is %d \nq is %d \n", p, q)
 
-	// msgFile := args[0]
-	// secretFile := args[1]
+	p, g, ga, a := generateDHParams(L, m)
 
+	msgF, err := os.OpenFile(os.Args[1], os.O_WRONLY|os.O_CREATE, 0644)
+	checkError(err)
+
+	secretF, err := os.OpenFile(os.Args[2], os.O_WRONLY|os.O_CREATE, 0644)
+	checkError(err)
+
+	_, err = msgF.WriteString(fmt.Sprintf("( %d,%d,%d )", p, g, ga))
+	checkError(err)
+
+	_, err = secretF.WriteString(fmt.Sprintf("( %d,%d,%d )", p, g, a))
+	checkError(err)
+
+	defer msgF.Close()
+	defer secretF.Close()
 }
