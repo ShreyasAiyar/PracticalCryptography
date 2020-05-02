@@ -21,10 +21,10 @@ p = 1024 bits and q = 160 bits by default. To change this, edit the const's L an
 `
 
 // L is the bit size for p
-const L = 20
+const L = 1024
 
 // Bit size for q
-const m = 10
+const m = 160
 
 func toHexInt(n *big.Int) string {
 	return fmt.Sprintf("%x", n)
@@ -214,8 +214,6 @@ func generateDHParams(L int64, m int64) (*big.Int, *big.Int, *big.Int, *big.Int)
 			break
 		}
 	}
-
-	// TODO: Verify that p=qj + 1. This demonstrates that the parameters meet the X9.42 parameter criteria.
 
 	// Generate random number a in the range [0, p)
 	a, err := rand.Int(rand.Reader, new(big.Int).Exp(big.NewInt(2), big.NewInt(L), nil))

@@ -83,5 +83,5 @@ func main() {
 	gb := readBobMsgFromFile(os.Args[1])
 
 	gab := generateSharedSecret(p, a, gb)
-	fmt.Printf("g^(ab) (mod p) is %d", gab)
+	fmt.Printf("%d\n", gab)
 }

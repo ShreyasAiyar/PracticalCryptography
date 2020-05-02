@@ -19,10 +19,10 @@ p = 1024 bits and q = 160 bits by default. To change this, edit the const's L an
 `
 
 // L is the bit size for p
-const L = 20
+const L = 1024
 
 // Bit size for q
-const m = 10
+const m = 160
 
 // Generates the DH Parameter b and computes g^b (mod p). Returns g^b (mod p) and g^(ab) (mod p)
 func generateDHParams(p, g, ga *big.Int) (*big.Int, *big.Int) {
@@ -90,7 +90,7 @@ func main() {
 	p, g, ga := readDHParametersFromFile(os.Args[1])
 	gb, gab := generateDHParams(p, g, ga)
 
-	fmt.Printf("g^(ab) (mod p) is %d", gab)
+	fmt.Printf("%d\n", gab)
 
 	msgF, err := os.OpenFile(os.Args[2], os.O_WRONLY|os.O_CREATE, 0644)
 	checkError(err)

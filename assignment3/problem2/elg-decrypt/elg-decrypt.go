@@ -148,5 +148,5 @@ func main() {
 	k := generateKey(p, g, gb, a)
 
 	plaintext := decryptCiphertext(cipherText, k)
-	fmt.Printf("%s", plaintext)
+	fmt.Printf("%s\n", plaintext)
 }

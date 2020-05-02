@@ -25,10 +25,10 @@ p = 1024 bits and q = 160 bits by default. To change this, edit the const's L an
 `
 
 // L is the bit size for p
-const L = 20
+const L = 1024
 
 // Bit size for q
-const m = 10
+const m = 160
 
 func toDecInt(n *big.Int) string {
 	return fmt.Sprintf("%d", n)

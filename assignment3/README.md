@@ -5,7 +5,7 @@ problem1
 
 problem2
 1. go run elg-keygen/elg-keygen.go public-key secret-key
-2. problem2 % go run elg-encrypt/elg-encrypt.go plaintext public-key ciphertext
-3. problem2 % go run elg-decrypt/elg-decrypt.go ciphertext secret-key 
+2. go run elg-encrypt/elg-encrypt.go plaintext public-key ciphertext
+3. go run elg-decrypt/elg-decrypt.go ciphertext secret-key 
 
 problem3
